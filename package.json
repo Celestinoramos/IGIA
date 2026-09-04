@@ -1,0 +1,55 @@
+{
+  "name": "instagram-autonomous-sales",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "predev": "pnpm db:migrate",
+    "dev": "concurrently -n panel,worker -c cyan,magenta \"next dev -p 4319\" \"pnpm worker:dev\"",
+    "worker:dev": "cross-env NODE_OPTIONS=--conditions=react-server tsx watch src/worker/main.ts",
+    "worker": "cross-env NODE_OPTIONS=--conditions=react-server tsx src/worker/main.ts",
+    "prebuild": "pnpm db:migrate",
+    "build": "next build",
+    "start": "concurrently -n panel,worker -c cyan,magenta \"next start -p 4319\" \"pnpm worker\"",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "cross-env NODE_OPTIONS=--conditions=react-server tsx src/db/migrate.ts",
+    "seed": "cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/seed.ts",
+    "demo": "cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/demo.ts",
+    "backup": "cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/backup.ts",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "cross-env NODE_OPTIONS=--conditions=react-server vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.44.5",
+    "next": "^15.5.4",
+    "openai": "^6.2.0",
+    "playwright-core": "^1.56.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "server-only": "^0.0.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@tailwindcss/postcss": "^4.1.13",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.5.2",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "drizzle-kit": "^0.31.5",
+    "eslint": "^9.36.0",
+    "eslint-config-next": "^15.5.4",
+    "tailwindcss": "^4.1.13",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

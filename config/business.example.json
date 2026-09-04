@@ -1,0 +1,33 @@
+{
+  "owner": {
+    "name": "{{SEU_NOME}}",
+    "role": "{{SEU_CARGO}}"
+  },
+  "company": {
+    "name": "{{NOME_DA_EMPRESA}}",
+    "website": "{{SITE_DA_EMPRESA}}",
+    "instagramHandle": "{{@SEU_INSTAGRAM}}"
+  },
+  "links": {
+    "whatsapp": "{{https://wa.me/55...}}",
+    "affiliateGroup": "{{link do grupo de afiliados}}"
+  },
+  "offer": {
+    "oneLinePitch": "{{o que a empresa resolve, em uma frase}}",
+    "howItWorks": ["{{passo 1}}", "{{passo 2}}", "{{passo 3}}"],
+    "revenueModel": "{{como a empresa ganha dinheiro}}",
+    "jargon": [{ "term": "{{termo do nicho}}", "meaning": "{{o que significa}}" }]
+  },
+  "claims": {
+    "verified": ["{{afirmacoes JA comprovadas — so estas podem ser enviadas}}"],
+    "unverified": ["{{afirmacoes a comprovar — BLOQUEADAS ate virarem prova}}"]
+  },
+  "icp": {
+    "segments": ["{{segmento 1}}", "{{segmento 2}}", "{{segmento 3}}"],
+    "keywords": ["{{palavra 1}}", "{{palavra 2}}", "{{palavra 3}}"]
+  },
+  "affiliates": {
+    "topics": ["{{tema 1}}", "{{tema 2}}"]
+  },
+  "geography": "{{regiao}}"
+}
