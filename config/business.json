@@ -5,12 +5,12 @@
   },
   "company": {
     "name": "{{NOME_DA_EMPRESA}}",
-    "website": "{{SITE_DA_EMPRESA}}",
+    "website": "https://example.com",
     "instagramHandle": "{{@SEU_INSTAGRAM}}"
   },
   "links": {
-    "whatsapp": "{{https://wa.me/55...}}",
-    "affiliateGroup": "{{link do grupo de afiliados}}"
+    "whatsapp": "https://wa.me/5511999999999",
+    "affiliateGroup": "https://chat.whatsapp.com/xxxxxxxxxxxxxxxx"
   },
   "offer": {
     "oneLinePitch": "{{o que a empresa resolve, em uma frase}}",

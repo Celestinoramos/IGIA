@@ -1,0 +1,54 @@
+{
+  "owner": {
+    "name": "Test Owner",
+    "role": "CEO"
+  },
+  "company": {
+    "name": "Test Company",
+    "website": "https://example.com",
+    "instagramHandle": "@testcompany"
+  },
+  "links": {
+    "whatsapp": "https://wa.me/5511999999999",
+    "affiliateGroup": "https://chat.whatsapp.com/test123"
+  },
+  "offer": {
+    "oneLinePitch": "Test pitch",
+    "howItWorks": [
+      "Step 1",
+      "Step 2"
+    ],
+    "revenueModel": "Subscription",
+    "jargon": [
+      {
+        "term": "test",
+        "meaning": "test definition"
+      }
+    ]
+  },
+  "claims": {
+    "verified": [
+      "Plataforma testada e validada por centenas de lojistas"
+    ],
+    "unverified": [
+      "Aprovacao garantida em 24 horas"
+    ]
+  },
+  "icp": {
+    "segments": [
+      "loja",
+      "dono"
+    ],
+    "keywords": [
+      "moda",
+      "fitness"
+    ]
+  },
+  "affiliates": {
+    "topics": [
+      "fashion",
+      "wellness"
+    ]
+  },
+  "geography": "BR"
+}

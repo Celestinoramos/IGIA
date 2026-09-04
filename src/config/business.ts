@@ -54,6 +54,10 @@ export const businessConfigSchema = z.object({
 export type BusinessConfig = z.infer<typeof businessConfigSchema>;
 
 function configPath(): string {
+  // Allow tests/tooling to point at an alternate config without touching the
+  // operator's real config/business.json.
+  const override = process.env.BUSINESS_CONFIG_PATH;
+  if (override) return resolve(process.cwd(), override);
   return resolve(process.cwd(), "config", "business.json");
 }
 
