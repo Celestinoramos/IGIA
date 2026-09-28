@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { getEnv } from "@/config/env";
 import { logger } from "@/lib/logger";
-import { getDb } from "@/db/client";
-import { webhookEvents } from "@/db/schema";
-import { newId } from "@/lib/ids";
-import { nowMs } from "@/lib/time";
 import {
   verifyWebhookSignature,
   verifyWebhookChallenge,
   parseInboundEvents,
 } from "@/integrations/instagram/webhook";
-import { ingestInbound } from "@/features/conversations/service";
+import { ingestWebhookEvents } from "@/features/conversations/service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,9 +25,9 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 /**
- * POST: inbound message events. Verifies the HMAC signature, dedupes by event
- * id (idempotency ledger), then ingests each message — matching the lead and
- * handing channel ownership to the API.
+ * POST: inbound message events. Verifies the HMAC signature, then dedupes and
+ * ingests each message — matching the lead and handing channel ownership to
+ * the API.
  */
 export async function POST(request: Request): Promise<Response> {
   const raw = await request.text();
@@ -51,22 +47,10 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const events = parseInboundEvents(body);
-  const db = getDb();
-  for (const event of events) {
-    // Idempotency: skip if we've already processed this Meta message id.
-    const ledger = db
-      .insert(webhookEvents)
-      .values({ id: newId("wh"), externalId: event.mid, payload: event as unknown as Record<string, unknown>, processedAt: nowMs() })
-      .onConflictDoNothing()
-      .returning()
-      .get();
-    if (!ledger) {
-      logger.info("Skipping duplicate webhook event", { mid: event.mid });
-      continue;
-    }
-    ingestInbound(event);
-  }
+  const result = ingestWebhookEvents(events);
 
-  // Always 200 quickly so Meta does not retry unnecessarily.
-  return NextResponse.json({ received: events.length });
+  // A failed event was rolled back: answer 500 so Meta redelivers it. Events
+  // that did succeed are skipped on redelivery by the idempotency ledger.
+  if (result.failed > 0) return NextResponse.json({ received: events.length, ...result }, { status: 500 });
+  return NextResponse.json({ received: events.length, ...result });
 }

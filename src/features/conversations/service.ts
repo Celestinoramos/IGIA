@@ -1,7 +1,7 @@
 import "server-only";
 import { loadBusinessConfig } from "@/config/business";
 import { getEnv } from "@/config/env";
-import { DAY_MS, MINUTE_MS, nowMs } from "@/lib/time";
+import { HOUR_MS, MESSAGING_WINDOW_MS, MINUTE_MS, nowMs } from "@/lib/time";
 import { recordAudit, recordEvent } from "@/lib/observability";
 import { logger } from "@/lib/logger";
 import { recordCircuitFailure, recordCircuitSuccess, pauseSystem, isPaused } from "@/lib/system-state";
@@ -15,7 +15,10 @@ import type { ConversationContext, Decision } from "@/integrations/openai/types"
 import { precheckApiSend, sendApiMessage, checkMessagingWindow } from "@/integrations/instagram/api";
 import { recordWhatsappHandoff } from "@/integrations/whatsapp/handoff";
 import { enqueue } from "@/worker/queue";
-import type { Lead } from "@/db/schema";
+import { getDb } from "@/db/client";
+import { webhookEvents, type Lead } from "@/db/schema";
+import { newId } from "@/lib/ids";
+import type { InboundMessageEvent } from "@/integrations/instagram/webhook";
 
 const CIRCUIT = "instagram_api";
 
@@ -62,12 +65,48 @@ export function ingestInbound(event: {
       instagramUserId: lead.instagramUserId ?? event.senderId,
       metaThreadId: lead.metaThreadId ?? `thread_${event.senderId}`,
       lastInboundAt: event.timestamp,
+      // A fresh reply supersedes any follow-up nudge already scheduled.
+      nextActionAt: null,
     },
   });
 
   recordEvent({ type: "inbound.received", leadId: lead.id, data: { mid: event.mid } });
   enqueue({ type: "process_inbound", payload: { leadId: lead.id }, dedupeKey: `process_inbound:${event.mid}`, priority: 5 });
   return { matched: true, leadId: lead.id };
+}
+
+/**
+ * Record each webhook event in the idempotency ledger and ingest it, in one
+ * transaction: if ingestion throws, the ledger row is rolled back too, so
+ * Meta's retry is processed instead of being dropped as a duplicate.
+ */
+export function ingestWebhookEvents(events: InboundMessageEvent[]): { processed: number; duplicates: number; failed: number } {
+  const db = getDb();
+  const result = { processed: 0, duplicates: 0, failed: 0 };
+  for (const event of events) {
+    try {
+      const fresh = db.transaction(() => {
+        const ledger = db
+          .insert(webhookEvents)
+          .values({ id: newId("wh"), externalId: event.mid, payload: event as unknown as Record<string, unknown>, processedAt: nowMs() })
+          .onConflictDoNothing()
+          .returning()
+          .get();
+        if (!ledger) return false;
+        ingestInbound(event);
+        return true;
+      });
+      if (fresh) result.processed += 1;
+      else {
+        result.duplicates += 1;
+        logger.info("Skipping duplicate webhook event", { mid: event.mid });
+      }
+    } catch (error) {
+      result.failed += 1;
+      logger.error("Webhook event ingestion failed", { mid: event.mid, error: String(error) });
+    }
+  }
+  return result;
 }
 
 function buildContext(lead: Lead, inboundText?: string): ConversationContext {
@@ -232,11 +271,13 @@ async function deliver(
  * owns the channel; respects the messaging window (closing it via exception if
  * expired). The message is a claim-free nudge.
  */
-export async function sendFollowup(leadId: string): Promise<{ status: string }> {
+export async function sendFollowup(leadId: string, scheduledFor?: number): Promise<{ status: string }> {
   if (isPaused()) return { status: "skipped_paused" };
   const lead = getLead(leadId);
   if (!lead) return { status: "lead_not_found" };
-  if (lead.channelState !== "api_active") return { status: "skipped_not_api_active" };
+  // A newer follow-up was scheduled since (the lead replied again): this one is stale.
+  if (scheduledFor !== undefined && lead.nextActionAt !== scheduledFor) return { status: "skipped_superseded" };
+  if (lead.channelState !== "api_active" && lead.channelState !== "api_eligible") return { status: "skipped_not_api_owned" };
   // If the lead already moved to a handoff/closed stage, no nudge is needed.
   if (["whatsapp_handoff", "registered", "active_customer", "closed"].includes(lead.pipelineState)) {
     return { status: "skipped_stage" };
@@ -248,15 +289,33 @@ export async function sendFollowup(leadId: string): Promise<{ status: string }> 
   return { status: "followup_sent" };
 }
 
-const FOLLOWUP_DELAY_MS = 2 * DAY_MS;
+const FOLLOWUP_DELAY_MS = 20 * HOUR_MS;
+/** Safety margin so the nudge lands well before Meta's 24h window closes. */
+const WINDOW_MARGIN_MS = HOUR_MS;
 
+/**
+ * Schedule a nudge inside the 24h messaging window (counted from the lead's
+ * last message): the API cannot send after it closes, so a later follow-up
+ * would always fail. If the window leaves no room, nothing is scheduled.
+ */
 export function scheduleFollowup(leadId: string): void {
+  const lead = getLead(leadId);
+  if (!lead) return;
+  if (!lead.lastInboundAt) {
+    recordEvent({ type: "conversation.followup_not_possible", leadId, data: { reason: "no_inbound_message" } });
+    return;
+  }
   const scale = getEnv().PACING_TIME_SCALE;
-  // A follow-up is a business-scheduling delay (days out), not a typing/pacing
-  // delay, so keep a floor to guarantee it is always scheduled in the future —
-  // even under an accelerated or zeroed clock used in tests.
-  const runAt = nowMs() + Math.max(FOLLOWUP_DELAY_MS * scale, MINUTE_MS);
+  const now = nowMs();
+  // Keep a floor so it is always in the future, even under a zeroed test clock.
+  const desired = now + Math.max(FOLLOWUP_DELAY_MS * scale, MINUTE_MS);
+  const latest = lead.lastInboundAt + MESSAGING_WINDOW_MS - WINDOW_MARGIN_MS;
+  const runAt = Math.min(desired, latest);
+  if (runAt <= now) {
+    recordEvent({ type: "conversation.followup_not_possible", leadId, data: { reason: "window_closing" } });
+    return;
+  }
   transitionLead({ leadId, actor: "ai", reason: "scheduled_followup", patch: { nextActionAt: runAt } });
-  enqueue({ type: "send_followup", payload: { leadId }, runAt, dedupeKey: `followup:${leadId}:${runAt}` });
+  enqueue({ type: "send_followup", payload: { leadId, runAt }, runAt, dedupeKey: `followup:${leadId}:${runAt}` });
   recordEvent({ type: "conversation.followup_scheduled", leadId, data: { runAt } });
 }
