@@ -12,7 +12,8 @@ process.env.DATABASE_URL = "file:./data/demo.db";
 process.env.BROWSER_DRIVER = "simulated";
 process.env.DRY_RUN = "true";
 process.env.OPENAI_API_KEY = "";
-process.env.PACING_TIME_SCALE = "0.001";
+// Zero pacing: no spacing between DMs, so draining the queue sends them all now.
+process.env.PACING_TIME_SCALE = "0";
 // Demo runs any time of day; open the operating window so pacing never blocks it.
 process.env.OPERATING_HOURS = "00:00-24:00";
 process.env.MAX_DMS_PER_DAY = "100";

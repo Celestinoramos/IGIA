@@ -1,6 +1,6 @@
 import "server-only";
 import { getEnv } from "@/config/env";
-import { nowMs } from "@/lib/time";
+import { MINUTE_MS, nowMs } from "@/lib/time";
 import { logger } from "@/lib/logger";
 import { recordEvent } from "@/lib/observability";
 import { pauseSystem, isPaused, recordCircuitFailure, recordCircuitSuccess, isCircuitOpen } from "@/lib/system-state";
@@ -12,7 +12,7 @@ import type { BrowserDriver } from "./types";
 import { SimulatedBrowserDriver } from "./simulated";
 import { RealBrowserDriver } from "./real";
 import { browserMutex } from "./mutex";
-import { checkBrowserPacing, incrementDmsSentToday, typingDelayPerCharMs } from "./pacing";
+import { checkBrowserPacing, incrementDmsSentToday, scheduleNextBrowserDm, typingDelayPerCharMs } from "./pacing";
 
 const CIRCUIT = "browser";
 
@@ -30,7 +30,12 @@ export interface FirstContactInput {
 export type FirstContactResult =
   | { status: "sent"; dryRun: boolean }
   | { status: "skipped"; reason: string }
+  /** Temporarily blocked; the lead is still pending and should be retried at `retryAt`. */
+  | { status: "deferred"; reason: string; retryAt: number }
   | { status: "failed"; reason: string };
+
+/** How long to wait before retrying when paused or the browser circuit is open. */
+const BLOCKED_RETRY_MS = 5 * MINUTE_MS;
 
 /**
  * Send the FIRST DM via the browser. Enforces, in order: global pause, circuit
@@ -40,12 +45,16 @@ export type FirstContactResult =
  * full diagnostics and routes the lead to human review.
  */
 export async function sendFirstContactDm(input: FirstContactInput): Promise<FirstContactResult> {
-  if (isPaused()) return { status: "skipped", reason: "system_paused" };
-  if (isCircuitOpen(CIRCUIT)) return { status: "skipped", reason: "circuit_open" };
+  if (isPaused()) return { status: "deferred", reason: "system_paused", retryAt: nowMs() + BLOCKED_RETRY_MS };
+  if (isCircuitOpen(CIRCUIT)) return { status: "deferred", reason: "circuit_open", retryAt: nowMs() + BLOCKED_RETRY_MS };
 
   const pacing = checkBrowserPacing();
   if (!pacing.allowed) {
-    return { status: "skipped", reason: `${pacing.reason ?? "pacing"}(sent=${pacing.sentToday}/limit=${pacing.dailyLimit})` };
+    return {
+      status: "deferred",
+      reason: `${pacing.reason ?? "pacing"}(sent=${pacing.sentToday}/limit=${pacing.dailyLimit})`,
+      retryAt: pacing.retryAt ?? nowMs() + BLOCKED_RETRY_MS,
+    };
   }
 
   return browserMutex.runExclusive(async () => {
@@ -69,6 +78,8 @@ export async function sendFirstContactDm(input: FirstContactInput): Promise<Firs
         });
         pauseSystem("browser_unavailable", "system");
         recordEvent({ type: "browser.unavailable", leadId: lead.id, data: { error: connection.error } });
+        // The lead was never contacted: retry once the operator fixes Chrome and resumes.
+        return { status: "deferred", reason: connection.error, retryAt: nowMs() + BLOCKED_RETRY_MS };
       }
       return { status: "failed", reason: connection.error };
     }
@@ -96,6 +107,17 @@ export async function sendFirstContactDm(input: FirstContactInput): Promise<Firs
       }
 
       recordCircuitSuccess(CIRCUIT);
+      scheduleNextBrowserDm();
+
+      // A dry run in the operator's real Chrome only types the message, it never
+      // sends it. Leave the lead pending so it gets the real DM once DRY_RUN is
+      // off, instead of marking it contacted. (The simulated driver still walks
+      // the full funnel so the sandbox and demo work end to end.)
+      if (result.dryRun && driver.name === "real") {
+        recordEvent({ type: "browser.dm_previewed", leadId: lead.id, data: { variantId: input.variantId ?? null } });
+        logger.info("Real DM previewed (dry-run); lead left pending", { leadId: lead.id });
+        return { status: "skipped", reason: "dry_run_preview" };
+      }
 
       // Record the outbound message and advance pipeline + channel atomically.
       addMessage({

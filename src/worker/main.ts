@@ -8,6 +8,7 @@ async function main(): Promise<void> {
   const { runWorkerLoop } = await import("./runner");
   const { logger } = await import("@/lib/logger");
   const { enqueue, hasPendingJobOfType } = await import("./queue");
+  const { requeueStrandedFirstContacts } = await import("@/features/campaigns/first-contact");
 
   runMigrations();
 
@@ -15,6 +16,9 @@ async function main(): Promise<void> {
   if (!hasPendingJobOfType("backup_db")) {
     enqueue({ type: "backup_db", dedupeKey: `backup_db:${new Date().toISOString().slice(0, 10)}` });
   }
+
+  const requeued = requeueStrandedFirstContacts();
+  if (requeued > 0) logger.info("Re-enqueued stranded first contacts", { count: requeued });
 
   const signal = { stopped: false };
   const shutdown = (sig: string) => {

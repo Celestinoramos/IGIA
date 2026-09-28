@@ -9,8 +9,9 @@ import {
   nowMs,
   parseOperatingHours,
   DAY_MS,
+  MINUTE_MS,
 } from "@/lib/time";
-import { getWarmupStartMs } from "@/lib/system-state";
+import { getNextBrowserDmAt, getWarmupStartMs, setNextBrowserDmAt } from "@/lib/system-state";
 
 /**
  * Human pacing exists for account health — the same discipline a real SDR
@@ -68,6 +69,13 @@ export interface PacingGate {
   reason?: string;
   dailyLimit: number;
   sentToday: number;
+  /** When blocked, the earliest time worth trying again. */
+  retryAt?: number;
+}
+
+/** After a DM goes out, hold the next one back by a random human interval. */
+export function scheduleNextBrowserDm(): void {
+  setNextBrowserDmAt(nowMs() + randomDelayMs());
 }
 
 /** Whether a browser DM may be sent right now (hours + daily/warmup cap). */
@@ -78,10 +86,14 @@ export function checkBrowserPacing(): PacingGate {
   const sentToday = dmsSentToday();
 
   if (!isWithinOperatingHours(nowMs(), hours, env.OPERATING_TIMEZONE)) {
-    return { allowed: false, reason: "outside_operating_hours", dailyLimit, sentToday };
+    return { allowed: false, reason: "outside_operating_hours", dailyLimit, sentToday, retryAt: nowMs() + 15 * MINUTE_MS };
   }
   if (sentToday >= dailyLimit) {
-    return { allowed: false, reason: "daily_limit_reached", dailyLimit, sentToday };
+    return { allowed: false, reason: "daily_limit_reached", dailyLimit, sentToday, retryAt: nowMs() + 30 * MINUTE_MS };
+  }
+  const nextDmAt = getNextBrowserDmAt();
+  if (nowMs() < nextDmAt) {
+    return { allowed: false, reason: "min_interval", dailyLimit, sentToday, retryAt: nextDmAt };
   }
   return { allowed: true, dailyLimit, sentToday };
 }

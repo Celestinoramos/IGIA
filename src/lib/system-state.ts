@@ -60,6 +60,17 @@ export function getWarmupStartMs(): number {
   return now;
 }
 
+const NEXT_BROWSER_DM_KEY = "next_browser_dm_at";
+
+/** Earliest time the next browser DM may go out (spacing between DMs). */
+export function getNextBrowserDmAt(): number {
+  return readState<number>(NEXT_BROWSER_DM_KEY) ?? 0;
+}
+
+export function setNextBrowserDmAt(ms: number): void {
+  writeState(NEXT_BROWSER_DM_KEY, ms);
+}
+
 // ── Circuit breaker ─────────────────────────────────────────────────────────
 
 interface CircuitState {
