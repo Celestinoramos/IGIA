@@ -1,7 +1,7 @@
 import { getDashboardMetrics } from "@/features/dashboard/metrics";
+import Link from "next/link";
 import { Card, StatCard, PageHeader, Badge } from "@/components/ui";
 import { PIPELINE_LABELS, formatUsd, formatNumber } from "@/lib/i18n";
-import { runDiscoveryAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,20 +14,9 @@ export default function DashboardPage() {
         title="Painel geral"
         description="Visão do ciclo autônomo: observar, decidir, agir, medir, aprender e adaptar — dentro dos limites configurados."
         actions={
-          <>
-            <form action={runDiscoveryAction}>
-              <input type="hidden" name="funnel" value="customer" />
-              <button className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
-                Simular descoberta (clientes)
-              </button>
-            </form>
-            <form action={runDiscoveryAction}>
-              <input type="hidden" name="funnel" value="affiliate" />
-              <button className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-sm font-semibold hover:bg-[var(--border)]">
-                Simular descoberta (afiliados)
-              </button>
-            </form>
-          </>
+          <Link href="/import" className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
+            Importar leads
+          </Link>
         }
       />
 

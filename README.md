@@ -13,11 +13,12 @@ message-by-message approval. It operates on its own inside the limits defined in
 
 Two funnels, one pipeline engine:
 
-- **Funnel A — customers.** Discover ICP profiles, dedupe against the blocklist and
+- **Funnel A — customers.** Import the operator's lead list (panel → *Importar leads*,
+  CSV or one handle per line), dedupe against the blocklist and
   do-not-contact list, score ICP fit, send a short personal opening DM **through the
   operator's real Chrome**, then hand the thread off to the official Meta API when the
   lead replies, qualify, handle objections, and route interested leads to WhatsApp.
-- **Funnel B — affiliates.** Discover creators in the configured topics/geography,
+- **Funnel B — affiliates.** Import creators in the configured topics/geography,
   approach them the same way, present the affiliate program (only *verified* claims),
   route to the affiliate group, and optimize for affiliates that generate **active
   customers**, not just group joins.
@@ -121,7 +122,7 @@ config/business.json         identity, offer, ICP, claims (gitignored)
 src/app                      Next.js panel (Server Components, Server Actions, webhook route)
 src/features/leads           dedupe, ICP scoring, pipeline/channel state machine
 src/features/conversations   message persistence, inbound orchestration, follow-ups
-src/features/campaigns       discovery + browser first contact
+src/features/campaigns       lead import (CSV parsing), discovery + browser first contact
 src/features/experiments     A/B assignment, variants, metrics
 src/features/affiliates      affiliate-funnel progression
 src/features/dashboard       metrics aggregation

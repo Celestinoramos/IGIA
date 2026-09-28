@@ -5,6 +5,7 @@ import { PauseControl } from "./PauseControl";
 
 const NAV = [
   { href: "/", label: "Painel geral" },
+  { href: "/import", label: "Importar leads" },
   { href: "/leads?funnel=customer", label: "Funil de clientes" },
   { href: "/leads?funnel=affiliate", label: "Funil de afiliados" },
   { href: "/experiments", label: "Experimentos" },

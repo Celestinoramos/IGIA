@@ -207,6 +207,22 @@ pnpm demo
 
 Em produção, use `pnpm build` e depois `pnpm start`.
 
+### De onde vêm os leads
+
+O sistema não busca perfis sozinho no Instagram: **você** traz a lista. No painel, abra
+**Importar leads**, escolha o funil (clientes ou afiliados) e cole a lista ou envie um CSV:
+
+```
+handle,nome,bio,seguidores,cidade,hashtags
+@loja_da_bela,Loja da Bela,Loja de roupas • dona Bela,3200,São Paulo,moda loja
+```
+
+Só a coluna do perfil é obrigatória (aceita `@perfil` ou o link do perfil); também vale
+uma lista simples, um perfil por linha. Cada perfil é deduplicado, checado contra a
+blocklist e pontuado pelo ICP do `config/business.json`. Os qualificados entram na fila de
+primeiro contato e saem no ritmo da seção 7. Sem nome e bio a pontuação costuma ficar
+baixa; para uma lista que você já revisou, marque **"contatar todos"**.
+
 ---
 
 ## 9. Como pausar
@@ -266,7 +282,9 @@ Vá com calma, do seguro para o real:
 1. **Simulação** — `BROWSER_DRIVER=simulated`, IA mock (sem chave). Rode `pnpm demo` e
    navegue pelo painel.
 2. **Dry-run real** — `BROWSER_DRIVER=real`, `DRY_RUN=true`. Conecta no seu Chrome, mas
-   **não envia** de verdade. Confirme que a aba abre, faz o trabalho e fecha sozinha.
+   **não envia** de verdade. Confirme que a aba abre, faz o trabalho e fecha sozinha. Os
+   leads usados no teste continuam pendentes: ao reiniciar com `DRY_RUN=false`, eles
+   recebem a DM de verdade.
 3. **Autorização + piloto limitado** — só depois que você autorizar, coloque
    `DRY_RUN=false` com `MAX_DMS_PER_DAY` bem baixo e observe.
 4. **Autonomia** — aumente os limites gradualmente conforme a conta e os resultados

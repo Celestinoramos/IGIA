@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { pauseSystem, resumeSystem } from "@/lib/system-state";
 import { resolveException } from "@/features/exceptions/repo";
-import { enqueue } from "@/worker/queue";
 import type { Funnel } from "@/features/leads/states";
-import type { PublicProfile } from "@/features/leads/scoring";
+import { discoverLeads, type DiscoveryResult } from "@/features/campaigns/discovery";
+import { parseLeadImport } from "@/features/campaigns/import";
 
 export async function pauseAction(formData: FormData): Promise<void> {
   const reason = (formData.get("reason") as string | null) ?? "operator_manual_pause";
@@ -24,24 +24,33 @@ export async function resolveExceptionAction(formData: FormData): Promise<void> 
   revalidatePath("/exceptions");
 }
 
+export interface ImportLeadsState {
+  status: "idle" | "ok" | "error";
+  message?: string;
+  result?: DiscoveryResult & { parsed: number };
+  errors?: string[];
+}
+
 /**
- * Simulate a discovery run for the given funnel using sample public profiles.
- * In production, candidates come from crawling public Instagram signals; the
- * worker will process the enqueued job (discover → qualify → first contact).
+ * Import the operator's lead list (pasted text or an uploaded CSV) into a
+ * funnel: parse, dedupe, blocklist-check and ICP-score each profile, then queue
+ * first contact for the qualified ones. The worker sends the DMs with pacing.
  */
-export async function runDiscoveryAction(formData: FormData): Promise<void> {
-  const funnel = ((formData.get("funnel") as string | null) ?? "customer") as Funnel;
-  const stamp = Date.now();
-  const customerSamples: PublicProfile[] = [
-    { instagramHandle: `@loja_novidades_${stamp}`, displayName: "Loja Novidades", bio: "Loja de roupas femininas. Faça seu pedido no delivery!", followerCount: 5200, location: "São Paulo", hashtags: ["loja", "moda"] },
-    { instagramHandle: `@hamburgueria_${stamp}`, displayName: "Burger House", bio: "Hamburgueria artesanal • delivery • dono João", followerCount: 9100, hashtags: ["delivery", "hamburgueria"] },
-  ];
-  const affiliateSamples: PublicProfile[] = [
-    { instagramHandle: `@dicas_financas_${stamp}`, displayName: "Dicas de Finanças", bio: "Conteúdo de finanças e empreendedorismo para pequenos negócios", followerCount: 38000, hashtags: ["financas", "empreendedorismo"] },
-  ];
-  enqueue({
-    type: "discover_leads",
-    payload: { funnel, candidates: funnel === "customer" ? customerSamples : affiliateSamples },
+export async function importLeadsAction(_prev: ImportLeadsState, formData: FormData): Promise<ImportLeadsState> {
+  const funnel: Funnel = formData.get("funnel") === "affiliate" ? "affiliate" : "customer";
+  const file = formData.get("file");
+  const pasted = (formData.get("text") as string | null) ?? "";
+  const text = file instanceof File && file.size > 0 ? await file.text() : pasted;
+  if (!text.trim()) return { status: "error", message: "Cole a lista ou escolha um arquivo CSV." };
+
+  const { profiles, errors } = parseLeadImport(text);
+  if (profiles.length === 0) {
+    return { status: "error", message: "Nenhum perfil válido encontrado.", errors };
+  }
+  const result = discoverLeads(funnel, profiles, {
+    source: "import",
+    qualifyAll: formData.get("qualifyAll") === "on",
   });
   revalidatePath("/", "layout");
+  return { status: "ok", result: { ...result, parsed: profiles.length }, errors };
 }

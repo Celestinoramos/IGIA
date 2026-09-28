@@ -7,7 +7,17 @@ import { scoreLead, type PublicProfile } from "@/features/leads/scoring";
 import type { Funnel } from "@/features/leads/states";
 import { enqueue } from "@/worker/queue";
 
-const QUALIFY_THRESHOLD = 25;
+export const QUALIFY_THRESHOLD = 25;
+
+export interface DiscoveryOptions {
+  /** Where the candidates came from, stored on the lead (default "discovery"). */
+  source?: string;
+  /**
+   * Qualify every new lead regardless of ICP score — for lists the operator has
+   * already vetted by hand. Blocklist and dedupe still apply.
+   */
+  qualifyAll?: boolean;
+}
 
 export interface DiscoveryResult {
   discovered: number;
@@ -19,10 +29,10 @@ export interface DiscoveryResult {
 /**
  * Discover candidate profiles for a funnel: dedupe against existing leads and
  * the blocklist, score against the ICP, and qualify high-scoring leads for
- * first contact. In production `candidates` come from public Instagram signals;
- * in the sandbox they are supplied by the seed/demo scripts.
+ * first contact. Candidates come from the operator's lead import in the panel,
+ * or from the seed/demo scripts in the sandbox.
  */
-export function discoverLeads(funnel: Funnel, candidates: PublicProfile[]): DiscoveryResult {
+export function discoverLeads(funnel: Funnel, candidates: PublicProfile[], options: DiscoveryOptions = {}): DiscoveryResult {
   const config = loadBusinessConfig();
   const result: DiscoveryResult = { discovered: 0, duplicates: 0, blocked: 0, qualified: 0 };
 
@@ -36,7 +46,7 @@ export function discoverLeads(funnel: Funnel, candidates: PublicProfile[]): Disc
       category: profile.category,
       followerCount: profile.followerCount,
       location: profile.location,
-      source: "discovery",
+      source: options.source ?? "discovery",
       keyword: score.matchedKeywords[0] ?? null,
       niche: score.niche,
       icpScore: score.score,
@@ -56,8 +66,10 @@ export function discoverLeads(funnel: Funnel, candidates: PublicProfile[]): Disc
     result.discovered += 1;
 
     // Qualify high-scoring leads and enqueue first contact.
-    if (score.score >= QUALIFY_THRESHOLD && upsert.lead) {
-      transitionLead({ leadId: upsert.lead.id, pipeline: "qualified", actor: "system", reason: "icp_qualified" });
+    const qualifies = score.score >= QUALIFY_THRESHOLD || options.qualifyAll === true;
+    if (qualifies && upsert.lead) {
+      const reason = score.score >= QUALIFY_THRESHOLD ? "icp_qualified" : "operator_vetted";
+      transitionLead({ leadId: upsert.lead.id, pipeline: "qualified", actor: "system", reason });
       updateLeadFields(upsert.lead.id, { icpScore: score.score, priority: score.priority });
       enqueue({
         type: "first_contact",
@@ -69,6 +81,6 @@ export function discoverLeads(funnel: Funnel, candidates: PublicProfile[]): Disc
     }
   }
 
-  recordEvent({ type: "campaign.discovery_run", data: { funnel, ...result } });
+  recordEvent({ type: "campaign.discovery_run", data: { funnel, source: options.source ?? "discovery", ...result } });
   return result;
 }

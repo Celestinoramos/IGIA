@@ -43,7 +43,7 @@ export default async function LeadsPage({
       {total === 0 ? (
         <EmptyState
           title="Nenhum lead neste funil ainda"
-          description="Use “Simular descoberta” no painel geral para popular o funil, ou deixe o worker rodar a descoberta."
+          description="Use “Importar leads” no menu para trazer os perfis que você quer prospectar."
         />
       ) : (
         <div className="flex gap-3 overflow-x-auto scroll-x pb-4">
