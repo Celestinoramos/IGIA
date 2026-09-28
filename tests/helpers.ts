@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { rmSync, writeFileSync, mkdirSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
 
 let counter = 0;
@@ -68,7 +68,11 @@ export async function freshDb(): Promise<void> {
   // overwrite the operator's real config/business.json.
   const fixturePath = "tests/fixtures/business.json";
   mkdirSync(resolve(process.cwd(), "tests/fixtures"), { recursive: true });
-  writeFileSync(resolve(process.cwd(), fixturePath), JSON.stringify(TEST_BUSINESS_CONFIG, null, 2));
+  // Test files run in parallel processes that all rewrite this fixture: write a
+  // temp file and rename it over, so no reader ever sees a half-written file.
+  const tmpPath = resolve(process.cwd(), `${fixturePath}.${process.pid}.tmp`);
+  writeFileSync(tmpPath, JSON.stringify(TEST_BUSINESS_CONFIG, null, 2));
+  renameSync(tmpPath, resolve(process.cwd(), fixturePath));
   process.env.BUSINESS_CONFIG_PATH = fixturePath;
   const { resetBusinessConfigCache } = await import("@/config/business");
   resetBusinessConfigCache();

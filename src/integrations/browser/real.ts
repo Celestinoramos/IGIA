@@ -7,6 +7,8 @@ import { logger } from "@/lib/logger";
 import type { BrowserDriver, DriverSendResult, FailureArtifacts, SendDmParams } from "./types";
 
 const INSTAGRAM_ORIGIN = "https://www.instagram.com";
+/** Domains (and their subdomains) the agent tab may load; e.g. not "evilinstagram.com". */
+const ALLOWED_HOSTS = ["instagram.com", "cdninstagram.com", "fbcdn.net"];
 
 async function sleep(ms: number): Promise<void> {
   if (ms <= 0) return;
@@ -102,7 +104,7 @@ export class RealBrowserDriver implements BrowserDriver {
   private async guardInstagramOnly(page: Page): Promise<void> {
     await page.route("**/*", (route) => {
       const target = new URL(route.request().url());
-      const allowed = target.hostname.endsWith("instagram.com") || target.hostname.endsWith("cdninstagram.com") || target.hostname.endsWith("fbcdn.net");
+      const allowed = ALLOWED_HOSTS.some((host) => target.hostname === host || target.hostname.endsWith(`.${host}`));
       if (allowed) route.continue();
       else route.abort();
     });
