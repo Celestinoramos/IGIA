@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+data
+backups
+.env
+.env*.local
+.chrome-profile
+screenshots
+traces
+coverage
+*.tsbuildinfo
+*.db
+*.db-shm
+*.db-wal

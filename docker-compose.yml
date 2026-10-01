@@ -1,0 +1,43 @@
+# Runs the panel + worker in a container with the simulated browser and (unless
+# OPENAI_API_KEY is set) the mock AI engine. The operator's real Chrome is not
+# reachable from here — use BROWSER_DRIVER=real only when running on the host.
+#
+# UID/GID are passed by the Makefile so files written to ./data stay yours.
+
+x-common: &common
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    BROWSER_DRIVER: simulated
+    DATABASE_URL: file:./data/app.db
+  user: "${UID:-1000}:${GID:-1000}"
+  ports:
+    - "4319:4319"
+
+services:
+  # Development: hot reload from the bind-mounted source.
+  app:
+    <<: *common
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+      # Keep the container's own Linux node_modules and build cache.
+      - /app/node_modules
+      - /app/.next
+    profiles: ["dev"]
+
+  # Production build: only data, backups and business config are mounted.
+  prod:
+    <<: *common
+    build:
+      context: .
+      target: prod
+    volumes:
+      - ./data:/app/data
+      - ./backups:/app/backups
+      - ./config/business.json:/app/config/business.json:ro
+    restart: unless-stopped
+    profiles: ["prod"]
